@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.01
+@version:  1.02
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value' : '1.01',
+        'value': '1.02',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -86,6 +86,12 @@ def read_parse_output_pool(input_file, output_file):
 
     # logging
     logger.info('Read in pool data from:  %s', input_file)
+    logger.info('Lines in this file:  %d', len(Lines))
+
+    # if the lines is not greater than 20 we did not get valid run
+    if len(Lines) < 20:
+        logger.info('Insufficient lines created - unable to parse file - EXITTING')
+        return
     
     # Debugging
     # print(Lines)
@@ -194,7 +200,7 @@ def read_parse_output_pool(input_file, output_file):
             # remove the file
             os.remove(input_file)
             # logging
-            logger.info('removed input file:  %s', input_file)
+            logger.info('Removed input file:  %s', input_file)
             
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -210,7 +216,7 @@ if __name__ == '__main__':
 
         
     # process the pool file
-    logger.info( "Read and save pool data" )
+    logger.info( "Call read and save pool data function" )
     read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
     
 
