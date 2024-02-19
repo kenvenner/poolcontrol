@@ -14,6 +14,8 @@ import logging
 import re
 from datetime import datetime
 import kvutil
+import kvgmailsendsimple
+
 
 # Logging Setup
 # logging.basicConfig(level=logging.INFO)
@@ -50,6 +52,39 @@ optiondictconfig = {
     'pool_filename' : {
         'value' : 'pool_temps.csv',
         'description' : 'defines the name of the file that holds the temperature readings',
+    },
+    'pool_heater_filename' : {
+        'value' : 'pool_heater.lck',
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'email_from' : {
+        'value' : '210608thSt@gmail.com',
+        'description' : 'who sends out the email about pool heater on',
+    },
+    'email_to' : {
+        'value' : 'ken@vennerllc.com, mscribner@bcciconst.com, reservations@michelleleighvacationrentals.com',
+#        'value' : 'ken@vennerllc.com',
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'email_subject' : {
+        'value' : 'Villa Carneros Pool Heater is ',
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'email_body' : {
+        'value' : 'We have just detected that the pool heater is ',
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'scopes' : {
+        'value' : None,
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'file_token_json' : {
+        'value' : None,
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'file_credentials_json' : {
+        'value' : None,
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
 }
 
@@ -201,7 +236,81 @@ def read_parse_output_pool(input_file, output_file):
             os.remove(input_file)
             # logging
             logger.info('Removed input file:  %s', input_file)
-            
+
+    # return what we just read in
+    return {
+        'pool_temp_last': pool_temp_last,
+        'pool_temp_set': pool_temp_set,
+        'pool_heat_set': pool_heat_set,
+        'pool_heat_mode': pool_heat_mode,
+        'spa_temp_last': spa_temp_last,
+        'spa_temp_set': spa_temp_set,
+        'spa_heat_set': spa_heat_set,
+        'spa_heat_mode': spa_heat_mode
+    }
+
+
+def message_on_pool_state_change(pool_settings, optiondict):
+    ''' create an email when the state changes on pool heater
+    using a lock file to capture what the state currently is
+
+    pool_settings - dict of values read in 
+    optiondict - the options dictionary
+
+    '''
+
+    msgid = None
+    
+    if os.path.isfile(optiondict['pool_heater_filename']):
+        # if there is a lock file
+
+        # and the pool heater is not ON message
+        # that the pool heater turned off and remove the lock file
+        if pool_settings['pool_heat_mode'] == 'Off':
+            # send message that heater is off
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['email_from'],
+                optiondict['email_to'],
+                optiondict['email_subject']+'OFF',
+                optiondict['email_body']+'OFF',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # remove the lock file
+            os.remove(optiondict['pool_heater_filename'])
+
+            # log message
+            logger.info('Pool heater off - sent message: %s and removed file: %s', msgid['id'], optiondict['pool_heater_filename'])
+    else:
+
+        # if there is NO lock file
+
+        # and the pool heater is ON message
+        # that the pool heater is now ON and create a lock file.
+        if pool_settings['pool_heat_mode'] != 'Off':
+            # send message that heater is ON
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['email_from'],
+                optiondict['email_to'],
+                optiondict['email_subject']+'ON',
+                optiondict['email_body']+'ON',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # create the lock file
+            with open(optiondict['pool_heater_filename'], 'w') as lock_file:
+                lock_file.write('Pool ON')
+
+            # log message
+            logger.info('Pool heater ON - sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_filename'])
+
+    # return back the message id or none
+    return msgid
+    
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
 
@@ -217,7 +326,10 @@ if __name__ == '__main__':
         
     # process the pool file
     logger.info( "Call read and save pool data function" )
-    read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
+    pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
+
+    # determine if we need to message people
+    message_on_pool_state_change(pool_settings, optiondict)
     
 
 # eof
