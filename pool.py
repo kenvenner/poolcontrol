@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.02
+@version:  1.04
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -12,11 +12,32 @@ import os.path
 import os
 import logging
 import re
-from datetime import datetime
+import datetime
 import kvutil
 import kvgmailsendsimple
 
+# CONSTANTS
+DAY_SECONDS = 60 * 60 * 24
+FIFTEEN_MIN_SECONDS = 60 * 15
 
+
+
+def modification_date(filename):
+    '''
+    return the last modified date on a file in datetime format
+    '''
+    t = os.path.getmtime(filename)
+    return datetime.datetime.fromtimestamp(t)
+
+def modification_days_and_seconds(filename):
+    '''
+    return an array that has the (days, seconds) of the file modification date
+    '''
+    file_datetime = modification_date(filename)
+    file_duration = datetime.datetime.now() - file_datetime
+    return divmod(file_duration.total_seconds(), DAY_SECONDS)
+
+               
 # Logging Setup
 # logging.basicConfig(level=logging.INFO)
 logging.basicConfig(filename=os.path.splitext(kvutil.scriptinfo()['name'])[0]+'.log',
@@ -28,7 +49,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.02',
+        'value': '1.04',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -57,42 +78,63 @@ optiondictconfig = {
         'value' : 'pool_heater.lck',
         'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
-    'email_from' : {
+    'pool_email_from' : {
         'value' : '210608thSt@gmail.com',
         'description' : 'who sends out the email about pool heater on',
     },
-    'email_to' : {
+    'pool_email_to' : {
         'value' : 'ken@vennerllc.com, mscribner@bcciconst.com, reservations@michelleleighvacationrentals.com',
-#        'value' : 'ken@vennerllc.com',
+#        'value' : 'ken@vennerllc.com',  # uncomment for testing purposes
         'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
-    'email_subject' : {
+    'pool_email_subject' : {
         'value' : 'Villa Carneros Pool Heater is ',
         'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
-    'email_body' : {
+    'pool_email_body' : {
         'value' : 'We have just detected that the pool heater is ',
         'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
+    'spa_heater_filename' : {
+        'value' : 'spa_heater.lck',
+        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+    },
+    'spa_email_from' : {
+        'value' : '210608thSt@gmail.com',
+        'description' : 'who sends out the email about spa heater on',
+    },
+    'spa_email_to' : {
+        'value' : 'ken@vennerllc.com',
+        'description' : 'defines the name of the file that says we sent a message about spa heater being on',
+    },
+    'spa_email_subject' : {
+        'value' : 'Villa Carneros SPA Heater is ',
+        'description' : 'defines the name of the file that says we sent a message about spa heater being on',
+    },
+    'spa_email_body' : {
+        'value' : 'We have just detected that the spa heater is ',
+        'description' : 'defines the name of the file that says we sent a message about spa heater being on',
+    },
     'scopes' : {
         'value' : None,
-        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+        'description' : 'defines the gmail scopes used to generate and send emails - see kvgmailsendsimple.py',
     },
     'file_token_json' : {
         'value' : None,
-        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+        'description' : 'defines the gmail filename of the json file that contains the account token (access and refresh) ',
     },
     'file_credentials_json' : {
         'value' : None,
-        'description' : 'defines the name of the file that says we sent a message about pool heater being on',
+        'description' : 'defines the gmail filename of the json file that contains the account credentials ',
     },
 }
 
 ### GLOBAL VARIABLES AND CONVERSIONS ###
 
 # set the time for the run
-now = datetime.now()
+now = datetime.datetime.now()
 now_str = now.strftime('%Y-%m-%d:%H:%M:%S')
+
 
 
 def check_file_writable(fnm):
@@ -260,19 +302,21 @@ def message_on_pool_state_change(pool_settings, optiondict):
     '''
 
     msgid = None
-    
+
+    # POOL
     if os.path.isfile(optiondict['pool_heater_filename']):
-        # if there is a lock file
+        # if there is a lock file - capture the informatoin about this lock file
+        pool_days, pool_seconds = modification_days_and_seconds(optiondict['pool_heater_filename'])        
 
         # and the pool heater is not ON message
         # that the pool heater turned off and remove the lock file
         if pool_settings['pool_heat_mode'] == 'Off':
             # send message that heater is off
             msgid = kvgmailsendsimple.gmail_send_simple_message(
-                optiondict['email_from'],
-                optiondict['email_to'],
-                optiondict['email_subject']+'OFF',
-                optiondict['email_body']+'OFF',
+                optiondict['pool_email_from'],
+                optiondict['pool_email_to'],
+                optiondict['pool_email_subject']+'OFF',
+                optiondict['pool_email_body']+'OFF',
                 optiondict['scopes'],
                 optiondict['file_token_json'],
                 optiondict['file_credentials_json']
@@ -283,6 +327,26 @@ def message_on_pool_state_change(pool_settings, optiondict):
 
             # log message
             logger.info('Pool heater off - sent message: %s and removed file: %s', msgid['id'], optiondict['pool_heater_filename'])
+
+        elif pool_days and pool_seconds < FIFTEEN_MIN_SECONDS:
+            # we have a lock file and we have had this lock file exist for more than a day
+            # we are greater than a day and less then the first 15 minutes of that next day
+            # we should send another message about the duratoin of this being on
+            # send message that heater is off
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['pool_email_from'],
+                optiondict['pool_email_to'],
+                optiondict['pool_email_subject']+'STILL ON - DAY ' + str(pool_days),
+                'Pool Heater continues to be on',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # log message
+            logger.info('Pool heater still ON [%s] days - sent message: %s and removed file: %s',
+                        pool_days, msgid['id'], optiondict['pool_heater_filename'])
+
     else:
 
         # if there is NO lock file
@@ -292,10 +356,10 @@ def message_on_pool_state_change(pool_settings, optiondict):
         if pool_settings['pool_heat_mode'] != 'Off':
             # send message that heater is ON
             msgid = kvgmailsendsimple.gmail_send_simple_message(
-                optiondict['email_from'],
-                optiondict['email_to'],
-                optiondict['email_subject']+'ON',
-                optiondict['email_body']+'ON',
+                optiondict['pool_email_from'],
+                optiondict['pool_email_to'],
+                optiondict['pool_email_subject']+'ON',
+                optiondict['pool_email_body']+'ON',
                 optiondict['scopes'],
                 optiondict['file_token_json'],
                 optiondict['file_credentials_json']
@@ -307,6 +371,91 @@ def message_on_pool_state_change(pool_settings, optiondict):
 
             # log message
             logger.info('Pool heater ON - sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_filename'])
+
+
+    # return back the message id or none
+    return msgid
+    
+def message_on_spa_state_change(pool_settings, optiondict):
+    ''' create an email when the state changes on spa heater
+    using a lock file to capture what the state currently is
+
+    pool_settings - dict of values read in 
+    optiondict - the options dictionary
+
+    '''
+
+    msgid = None
+
+    # SPA
+    if os.path.isfile(optiondict['spa_heater_filename']):
+        # if there is a lock file - capture the informatoin about this lock file
+        spa_days, spa_seconds = modification_days_and_seconds(optiondict['pool_heater_filename'])
+        
+        # and the spa heater is not ON message
+        # that the spa heater turned off and remove the lock file
+        if pool_settings['spa_heat_mode'] == 'Off':
+            # send message that heater is off
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['spa_email_from'],
+                optiondict['spa_email_to'],
+                optiondict['spa_email_subject']+'OFF',
+                optiondict['spa_email_body']+'OFF',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # remove the lock file
+            os.remove(optiondict['spa_heater_filename'])
+
+            # log message
+            logger.info('SPA heater off - sent message: %s and removed file: %s', msgid['id'], optiondict['spa_heater_filename'])
+
+        elif spa_days and spa_seconds < FIFTEEN_MIN_SECONDS:
+            # we have a lock file and we have had this lock file exist for more than a day
+            # we are greater than a day and less then the first 15 minutes of that next day
+            # we should send another message about the duratoin of this being on
+            # send message that heater is off
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['spa_email_from'],
+                optiondict['spa_email_to'],
+                optiondict['spa_email_subject']+'STILL ON - DAY ' + str(spa_days),
+                'SPA Heater continues to be on',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # log message
+            logger.info('SPA heater still ON [%s] days - sent message: %s and removed file: %s',
+                        spa_days, msgid['id'], optiondict['spa_heater_filename'])
+            
+    else:
+
+        # if there is NO lock file
+
+        # and the spa heater is ON message
+        # that the spa heater is now ON and create a lock file.
+        if pool_settings['spa_heat_mode'] != 'Off':
+            # send message that heater is ON
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['spa_email_from'],
+                optiondict['spa_email_to'],
+                optiondict['spa_email_subject']+'ON',
+                optiondict['spa_email_body']+'ON',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # create the lock file
+            with open(optiondict['spa_heater_filename'], 'w') as lock_file:
+                lock_file.write('SPA ON')
+
+            # log message
+            logger.info('SPA heater ON - sent message: %s and created file: %s', msgid['id'], optiondict['spa_heater_filename'])
+
 
     # return back the message id or none
     return msgid
@@ -328,8 +477,11 @@ if __name__ == '__main__':
     logger.info( "Call read and save pool data function" )
     pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
 
-    # determine if we need to message people
+    # POOL - determine if we need to message people
     message_on_pool_state_change(pool_settings, optiondict)
+    
+    # SPA determine if we need to message people
+    message_on_spa_state_change(pool_settings, optiondict)
     
 
 # eof
