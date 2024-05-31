@@ -172,6 +172,9 @@ def message_on_file_too_old(fname, max_age_seconds, lock_fname, max_lock_age_sec
         # if there is a lock file - capture the informatoin about this lock file
         lock_days, lock_seconds = modification_days_and_seconds(lock_fname)
 
+        # log message
+        # logger.info('Lock file age %s is not older than %s', lock_seconds, max_lock_age_seconds)
+
         # check age of the lock file
         if lock_seconds < max_lock_age_seconds:
             return
