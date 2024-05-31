@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.04
+@version:  1.05
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.04',
+        'value': '1.05',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -472,6 +472,15 @@ if __name__ == '__main__':
     # print header to show what is going on (convert this to a kvutil function:  kvutil.loggingStart(logger,optiondict))
     kvutil.loggingAppStart( logger, optiondict, kvutil.scriptinfo()['name'] )
 
+    # refresh the token - always do this as we don't always send an email
+    kvgmailsendsimple.gmail_refresh_token_take_no_action(
+            optiondict['pool_email_from'],
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+    )
+    # log message
+    logger.info('Refreshed the gmail token')
         
     # process the pool file
     logger.info( "Call read and save pool data function" )

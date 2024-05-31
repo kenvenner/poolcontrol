@@ -244,7 +244,17 @@ if __name__ == '__main__':
     # print header to show what is going on (convert this to a kvutil function:  kvutil.loggingStart(logger,optiondict))
     kvutil.loggingAppStart( logger, optiondict, kvutil.scriptinfo()['name'] )
 
+    # refresh the token - always do this as we don't always send an email
+    kvgmailsendsimple.gmail_refresh_token_take_no_action(
+            optiondict['email_from'],
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+    )
+    # log message
+    logger.info('Refreshed the gmail token')
 
+    
     # step through each of the files to process
     for rec in optiondict['check_files']:
         message_on_file_too_old(rec['fname'], rec['max_age_seconds'], rec['lock_fname'], rec['max_lock_age_seconds'], optiondict)
