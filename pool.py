@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.06
+@version:  1.07
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -20,7 +20,7 @@ import kvgmailsendsimple
 DAY_SECONDS = 60 * 60 * 24
 FIFTEEN_MIN_SECONDS = 60 * 15
 FOUR_HOUR_SECONDS = 60 * 60 * 4
-
+MAX_POOL_TEMP = 85.0
 
 
 def modification_date(filename):
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.06',
+        'value': '1.07',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -314,8 +314,14 @@ def message_on_pool_state_change(pool_settings, optiondict):
 
     msgid = None
 
+    ### NO DATA READ - POOL
+    
     # special processing when we get no pool_settings
-    if not pool_settings and optiondict['pool_missing_filename']:
+    if not pool_settings:
+        if not optiondict['pool_missing_filename']:
+            # we are not alerting on pool issues
+            return
+        
         # check to see if thereis a pool not woking lock file
         if os.path.isfile(optiondict['pool_missing_filename']):
             # check the age/duraction of this file to see if we should send again
@@ -326,25 +332,31 @@ def message_on_pool_state_change(pool_settings, optiondict):
                 # take no action yet
                 return
 
-            # create message that we are not currently reading pool settings
-            # send message that heater is ON
-            msgid = kvgmailsendsimple.gmail_send_simple_message(
-                optiondict['pool_email_from'],
-                optiondict['pool_email_to'],
-                optiondict['pool_email_subject']+'Not Reading Pool Settings',
-                optiondict['pool_email_body']+'Not Reading Pool Settings',
-                optiondict['scopes'],
-                optiondict['file_token_json'],
-                optiondict['file_credentials_json']
-            )
-
-            # create the lock file
-            with open(optiondict['pool_missing_filename'], 'w') as lock_file:
-                lock_file.write('Not Reading Pool Settings')
-
-            # log message
-            logger.info('Not reading pool settings - sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_filename'])
+            # we got here - so we need to send another reminder
+            logger.info('Time threshold exceed - sending another reminder')
             
+        # create message that we are not currently reading pool settings
+        # send message that heater is ON
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['pool_email_from'],
+            optiondict['pool_email_to'],
+            optiondict['pool_email_subject']+'Not Reading Pool Settings',
+            optiondict['pool_email_body']+'Not Reading Pool Settings',
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+
+        # create the lock file
+        with open(optiondict['pool_missing_filename'], 'w') as lock_file:
+            lock_file.write('Not Reading Pool Settings')
+
+        # log message
+        logger.info('Not reading pool settings - sent message: %s and created file: %s', msgid['id'], optiondict['pool_missing_filename'])
+
+        # return - we have nothing to process
+        return
+    
     # POOL
     if os.path.isfile(optiondict['pool_heater_filename']):
         # if there is a lock file - capture the informatoin about this lock file
@@ -388,7 +400,23 @@ def message_on_pool_state_change(pool_settings, optiondict):
             # log message
             logger.info('Pool heater still ON [%s] days - sent message: %s and removed file: %s',
                         pool_days, msgid['id'], optiondict['pool_heater_filename'])
+        elif pool_settings['pool_temp_set'] and float(pool_settings['pool_temp_set']) > MAX_POOL_TEMP:
+            # SETTING GREATER THAN MAX
+            # check to see if the pool setting exceeds our max
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['pool_email_from'],
+                optiondict['pool_email_to'],
+                optiondict['pool_email_subject']+'SET OVER THE MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
 
+            # log message
+            logger.info('Pool heater set over max [%s/%s] days - sent message: %s and removed file: %s',
+                        pool_settings['pool_temp_set'], str(MAX_POOL_TEMP), msgid['id'], optiondict['pool_heater_filename'])
+            
     else:
 
         # if there is NO lock file
@@ -413,7 +441,23 @@ def message_on_pool_state_change(pool_settings, optiondict):
 
             # log message
             logger.info('Pool heater ON - sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_filename'])
-
+            
+            # SETTING GREATER THAN MAX - only check when we just turned on the heat
+            if pool_settings['pool_temp_set'] and float(pool_settings['pool_temp_set']) > MAX_POOL_TEMP:
+                # check to see if the pool setting exceeds our max
+                msgid = kvgmailsendsimple.gmail_send_simple_message(
+                    optiondict['pool_email_from'],
+                    optiondict['pool_email_to'],
+                    optiondict['pool_email_subject']+'SET OVER THE MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                    'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                    optiondict['scopes'],
+                    optiondict['file_token_json'],
+                    optiondict['file_credentials_json']
+                )
+                
+                # log message
+                logger.info('Pool heater set over max [%s/%s] days - sent message: %s and removed file: %s',
+                            pool_settings['pool_temp_set'], str(MAX_POOL_TEMP), msgid['id'], optiondict['pool_heater_filename'])
 
     # return back the message id or none
     return msgid
@@ -430,7 +474,11 @@ def message_on_spa_state_change(pool_settings, optiondict):
     msgid = None
 
     # special processing when we get no spa_settings
-    if not pool_settings and optiondict['spa_missing_filename']:
+    if not pool_settings:
+        if not optiondict['spa_missing_filename']:
+            # we are not alerting on spa issues
+            return
+
         # check to see if thereis a pool not woking lock file
         if os.path.isfile(optiondict['spa_missing_filename']):
             # check the age/duraction of this file to see if we should send again
@@ -441,24 +489,31 @@ def message_on_spa_state_change(pool_settings, optiondict):
                 # take no action yet
                 return
 
-            # create message that we are not currently reading pool settings
-            # send message that heater is ON
-            msgid = kvgmailsendsimple.gmail_send_simple_message(
-                optiondict['spa_email_from'],
-                optiondict['spa_email_to'],
-                optiondict['spa_email_subject']+'Not Reading Pool Settings',
-                optiondict['spa_email_body']+'Not Reading Pool Settings',
-                optiondict['scopes'],
-                optiondict['file_token_json'],
-                optiondict['file_credentials_json']
-            )
+            # we got here - so we need to send another reminder
+            logger.info('Time threshold exceed - sending another reminder')
 
-            # create the lock file
-            with open(optiondict['spa_missing_filename'], 'w') as lock_file:
-                lock_file.write('Not Reading Pool Settings')
 
-            # log message
-            logger.info('Not reading pool settings - sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_filename'])
+        # create message that we are not currently reading pool settings
+        # send message that heater is ON
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['spa_email_from'],
+            optiondict['spa_email_to'],
+            optiondict['spa_email_subject']+'Not Reading Pool Settings',
+            optiondict['spa_email_body']+'Not Reading Pool Settings',
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+        
+        # create the lock file
+        with open(optiondict['spa_missing_filename'], 'w') as lock_file:
+            lock_file.write('Not Reading Pool Settings')
+            
+        # log message
+        logger.info('Not reading pool settings - sent message: %s and created file: %s', msgid['id'], optiondict['spa_missing_filename'])
+
+        # return - we have nothing to process
+        return
             
     # SPA
     if os.path.isfile(optiondict['spa_heater_filename']):
