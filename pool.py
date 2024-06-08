@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.07
+@version:  1.08
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.07',
+        'value': '1.08',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -356,6 +356,26 @@ def message_on_pool_state_change(pool_settings, optiondict):
 
         # return - we have nothing to process
         return
+    elif optiondict['pool_missing_filename'] and os.path.exists(optiondict['pool_missing_filename']):
+        # we are getting data and we have a lock file that must now be removed
+
+        # send message that heater is off
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['pool_email_from'],
+            optiondict['pool_email_to'],
+            optiondict['pool_email_subject']+'NOW Reading Pool Settings',
+            optiondict['pool_email_body']+'NOW Reading Pool Settings',
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+
+        # remove the lock file
+        os.remove(optiondict['pool_missing_filename'])
+        
+        # log message
+        logger.info('NOW reading pool settings - sent message: %s and removed file: %s', msgid['id'], optiondict['pool_missing_filename'])
+        
     
     # POOL
     if os.path.isfile(optiondict['pool_heater_filename']):
@@ -514,11 +534,31 @@ def message_on_spa_state_change(pool_settings, optiondict):
 
         # return - we have nothing to process
         return
+    elif optiondict['spa_missing_filename'] and os.path.exists(optiondict['spa_missing_filename']):
+        # we are getting data and we have a lock file that must now be removed
+
+        # send message that heater is off
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['spa_email_from'],
+            optiondict['spa_email_to'],
+            optiondict['spa_email_subject']+'NOW Reading Pool Settings',
+            optiondict['spa_email_body']+'NOW Reading Pool Settings',
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+
+        # remove the lock file
+        os.remove(optiondict['spa_missing_filename'])
+
+        # log message
+        logger.info('NOW reading pool settings - sent message: %s and removed file: %s', msgid['id'], optiondict['spa_missing_filename'])
+        
             
     # SPA
     if os.path.isfile(optiondict['spa_heater_filename']):
         # if there is a lock file - capture the informatoin about this lock file
-        spa_days, spa_seconds = modification_days_and_seconds(optiondict['pool_heater_filename'])
+        spa_days, spa_seconds = modification_days_and_seconds(optiondict['spa_heater_filename'])
         
         # and the spa heater is not ON message
         # that the spa heater turned off and remove the lock file
