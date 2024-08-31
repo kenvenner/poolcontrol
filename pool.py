@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.08
+@version:  1.09
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.08',
+        'value': '1.09',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -83,6 +83,10 @@ optiondictconfig = {
 #        'value' : 'pool_missing.lck',
         'value' : None,  # not set - we want to alert spa team not pool team
         'description' : 'defines the name of the file that says we sent a message about pool settings not being read',
+    },
+    'pool_heater_off_filename' : {
+        'value' : 'pool_heater_off.lck',
+        'description' : 'defines the name of the file that says we need to turn off the pool heater',
     },
     'pool_email_from' : {
         'value' : '210608thSt@gmail.com',
@@ -482,6 +486,53 @@ def message_on_pool_state_change(pool_settings, optiondict):
     # return back the message id or none
     return msgid
     
+def message_on_pool_turn_off(pool_settings, optiondict):
+    ''' create an email when we are creating a file that will turn off the pool
+
+    pool_settings - dict of values read in 
+    optiondict - the options dictionary
+
+    '''
+
+    msgid = None
+
+    ### NO DATA READ - POOL
+    
+    # special processing when we get no pool_settings
+    if not pool_settings:
+        # we are not alerting on pool issues
+        return
+
+    # if there is no filename we do not turn off the heat
+    if not optiondict['pool_heater_off_filename']:
+        return
+    
+    # the pool heater is ON message
+    # create the file to have it turned off and message
+    # that we are turning off the pool heater
+    if pool_settings['pool_heat_mode'] != 'Off':
+        # send message that heater is ON
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['pool_email_from'],
+            optiondict['pool_email_to'],
+            optiondict['pool_email_subject']+'Being Turned OFF',
+            optiondict['pool_email_body']+'Being Turned OFF',
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+
+        # create the lock file
+        with open(optiondict['pool_heater_off_filename'], 'w') as lock_file:
+            lock_file.write('Pool ON being turned OFF')
+
+        # log message
+        logger.info('Pool heater ON - being turned OFF sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_off_filename'])
+            
+
+    # return back the message id or none
+    return msgid
+    
 def message_on_spa_state_change(pool_settings, optiondict):
     ''' create an email when the state changes on spa heater
     using a lock file to capture what the state currently is
@@ -660,6 +711,8 @@ if __name__ == '__main__':
     # SPA determine if we need to message people
     message_on_spa_state_change(pool_settings, optiondict)
     
+    # POOL - generate file to turn off pool
+    message_on_pool_turn_off(pool_settings, optiondict)
 
 # eof
 
