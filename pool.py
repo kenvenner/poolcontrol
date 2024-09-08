@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.09
+@version:  1.10
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.09',
+        'value': '1.10',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -113,12 +113,21 @@ optiondictconfig = {
         'value' : 'spa_missing.lck',
         'description' : 'defines the name of the file that says we sent a message about pool settings not being read',
     },
+    'spa_heater_off_filename' : {
+        'value' : 'spa_heater_off.lck',
+        'description' : 'defines the name of the file that says we need to turn off the spa heater',
+    },
+    'spa_heater_off_hours' : {
+        'value' : 3.0,
+        'description' : 'defines the number of hours we allow the SPA to remain on until we automatically turn it off',
+    },
     'spa_email_from' : {
         'value' : '210608thSt@gmail.com',
         'description' : 'who sends out the email about spa heater on',
     },
     'spa_email_to' : {
-        'value' : 'ken@vennerllc.com',
+        'value' : 'ken@vennerllc.com, mscribner@bcciconst.com, reservations@michelleleighvacationrentals.com',
+#        'value' : 'ken@vennerllc.com',
         'description' : 'defines the name of the file that says we sent a message about spa heater being on',
     },
     'spa_email_subject' : {
@@ -631,6 +640,30 @@ def message_on_spa_state_change(pool_settings, optiondict):
             # log message
             logger.info('SPA heater off - sent message: %s and removed file: %s', msgid['id'], optiondict['spa_heater_filename'])
 
+        elif optiondict['spa_heater_off_filename'] and optiondict['spa_heater_off_hours'] and spa_seconds > optiondict['spa_heater_off_hours'] * 60 * 60:
+            # we have a desire to turn off the spa because we defined two variable - filename and hours
+            # and the spa has been on longer than that defined max time
+            # so generate the file that causes the spa to be disabled
+            # and send message that we are going to turn off the spa
+            
+            # send message that heater is ON
+            msgid = kvgmailsendsimple.gmail_send_simple_message(
+                optiondict['spa_email_from'],
+                optiondict['spa_email_to'],
+                optiondict['spa_email_subject']+'Being Turned OFF',
+                optiondict['spa_email_body']+'Being Turned OFF',
+                optiondict['scopes'],
+                optiondict['file_token_json'],
+                optiondict['file_credentials_json']
+            )
+
+            # create the lock file
+            with open(optiondict['spa_heater_off_filename'], 'w') as lock_file:
+                lock_file.write('SPA ON being turned OFF')
+
+            # log message
+            logger.info('SPA heater on too long turning off SPA - sent message: %s and created file: %s', msgid['id'], optiondict['spa_heater_off_filename'])
+            
         elif spa_days and spa_seconds < FIFTEEN_MIN_SECONDS:
             # we have a lock file and we have had this lock file exist for more than a day
             # we are greater than a day and less then the first 15 minutes of that next day
