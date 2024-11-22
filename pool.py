@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.10
+@version:  1.11
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -15,6 +15,7 @@ import re
 import datetime
 import kvutil
 import kvgmailsendsimple
+import kvdate
 
 # CONSTANTS
 DAY_SECONDS = 60 * 60 * 24
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.10',
+        'value': '1.11',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -87,6 +88,10 @@ optiondictconfig = {
     'pool_heater_off_filename' : {
         'value' : 'pool_heater_off.lck',
         'description' : 'defines the name of the file that says we need to turn off the pool heater',
+    },
+    'pool_heater_allowed_filename' : {
+        'value' : 'pool_heater_allowed.txt',
+        'description' : 'defines the name of the file that hold the list of dates we enable the pool heater to work',
     },
     'pool_email_from' : {
         'value' : '210608thSt@gmail.com',
@@ -178,6 +183,29 @@ def check_file_writable(fnm):
     # target is creatable if parent dir is writable
     return os.access(pdir, os.W_OK)
 
+
+def read_pool_heater_allowable_file(input_file):
+    '''
+    if file exists, read in the file and convert each line to a date and build a list of dates
+    that we will not flag the pool is enabled and attempt to turn it off
+    '''
+    pool_heater_allowed = []
+    pool_heater_invalid_dates = []
+
+    # no file - so no inputs
+    if not os.path.exists(input_file):
+        return pool_heater_allowed, pool_heater_invalid_dates
+
+    # get the file read in the lines and convert the string to date
+    with open(input_file, 'r') as file:
+        # Read each line in the file
+        for idx, line in enumerate(file):
+            try:
+                pool_heater_allowed.append(kvdate.datetime_from_str(line.strip()).date())
+            except Exception as e:
+                pool_heater_invalid_dates.append(f'{idx+1}|{line.strip()}|{e}')
+
+    return pool_heater_allowed, pool_heater_invalid_dates
 
 def read_parse_output_pool(input_file, output_file):
 
@@ -495,16 +523,34 @@ def message_on_pool_state_change(pool_settings, optiondict):
     # return back the message id or none
     return msgid
     
-def message_on_pool_turn_off(pool_settings, optiondict):
+def message_on_pool_turn_off(pool_settings, pool_heater_allowed, pool_heater_invalid_dates, optiondict):
     ''' create an email when we are creating a file that will turn off the pool
 
-    pool_settings - dict of values read in 
+    pool_settings - dict of values read in
+    pool_heater_allowed - list of datetime values where the pool can be on
+    pool_heater_invalid_dates - list of strings and row numbers where we could not convert the string to a date
     optiondict - the options dictionary
+
+    check to see if we have invalid date in the import file and message
+    check to see if the list of valid dates for the pool to be on is today and if so - don't turn it off
 
     '''
 
     msgid = None
 
+    ### invalid dates in read file
+    if pool_heater_invalid_dates:
+        # send message that heater is ON
+        msgid = kvgmailsendsimple.gmail_send_simple_message(
+            optiondict['pool_email_from'],
+            optiondict['pool_email_to'],
+            optiondict['pool_email_subject']+'Invalid date lines in file',
+            'Unable to convert following lines in file to datetime strings:\n' + '\n'.join(pool_heater_invalid_dates),
+            optiondict['scopes'],
+            optiondict['file_token_json'],
+            optiondict['file_credentials_json']
+        )
+       
     ### NO DATA READ - POOL
     
     # special processing when we get no pool_settings
@@ -514,6 +560,10 @@ def message_on_pool_turn_off(pool_settings, optiondict):
 
     # if there is no filename we do not turn off the heat
     if not optiondict['pool_heater_off_filename']:
+        return
+
+    # test to see if this is a non-alerting datetime
+    if datetime.datetime.now().date() in pool_heater_allowed:
         return
     
     # the pool heater is ON message
@@ -738,6 +788,9 @@ if __name__ == '__main__':
     logger.info( "Call read and save pool data function" )
     pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
 
+    # POOL - capture valid dates for pool to be enabled
+    pool_heater_allowed, pool_heater_invalid_dates(optiondict['pool_heater_allowed_filename'])
+
     # POOL - determine if we need to message people
     message_on_pool_state_change(pool_settings, optiondict)
     
@@ -745,7 +798,7 @@ if __name__ == '__main__':
     message_on_spa_state_change(pool_settings, optiondict)
     
     # POOL - generate file to turn off pool
-    message_on_pool_turn_off(pool_settings, optiondict)
+    message_on_pool_turn_off(pool_settings, pool_heater_allowed, pool_heater_invalid_dates, optiondict)
 
 # eof
 
