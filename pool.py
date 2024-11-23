@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.11
+@version:  1.12
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.11',
+        'value': '1.12',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -194,6 +194,7 @@ def read_pool_heater_allowable_file(input_file):
 
     # no file - so no inputs
     if not os.path.exists(input_file):
+        logger.info(input_file + ' not found')
         return pool_heater_allowed, pool_heater_invalid_dates
 
     # get the file read in the lines and convert the string to date
@@ -205,6 +206,7 @@ def read_pool_heater_allowable_file(input_file):
             except Exception as e:
                 pool_heater_invalid_dates.append(f'{idx+1}|{line.strip()}|{e}')
 
+    logger.info(str(len(pool_heater_allowed)) + ' dates allowed to have pool enabled')
     return pool_heater_allowed, pool_heater_invalid_dates
 
 def read_parse_output_pool(input_file, output_file):
@@ -564,6 +566,8 @@ def message_on_pool_turn_off(pool_settings, pool_heater_allowed, pool_heater_inv
 
     # test to see if this is a non-alerting datetime
     if datetime.datetime.now().date() in pool_heater_allowed:
+        # log message
+        logger.info('Pool heater ON and pool_heater_allowed is enabled - no action taken')
         return
     
     # the pool heater is ON message
@@ -789,7 +793,7 @@ if __name__ == '__main__':
     pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
 
     # POOL - capture valid dates for pool to be enabled
-    pool_heater_allowed, pool_heater_invalid_dates(optiondict['pool_heater_allowed_filename'])
+    pool_heater_allowed, pool_heater_invalid_dates = read_pool_heater_allowable_file(optiondict['pool_heater_allowed_filename'])
 
     # POOL - determine if we need to message people
     message_on_pool_state_change(pool_settings, optiondict)
