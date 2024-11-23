@@ -3,7 +3,7 @@ from __future__ import print_function
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.02
+@version:  1.03
 
 Library of tools for date time processing used in general by KV
 
@@ -24,8 +24,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 # set the module version number
-AppVersion = '1.02'
-__version__ = '1.02'
+AppVersion = '1.03'
+__version__ = '1.03'
 
 
 def current_timezone_string():
@@ -95,7 +95,8 @@ def datetime_from_str(value, skipblank=False):
     if value[-1].upper() == 'Z':
         value = value[:-1]
 
-    print('value:', value)
+    # debugging
+    # print('value:', value)
 
     for (redate, datefmt) in datefmts:
         if redate.match(value):
