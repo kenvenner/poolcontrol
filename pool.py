@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.12
+@version:  1.13
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -51,7 +51,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.12',
+        'value': '1.13',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -98,7 +98,7 @@ optiondictconfig = {
         'description' : 'who sends out the email about pool heater on',
     },
     'pool_email_to' : {
-        'value' : 'ken@vennerllc.com, mscribner@bcciconst.com, reservations@michelleleighvacationrentals.com',
+        'value' : 'ken@vennerllc.com, mike.kmsdev2@outlook.com, reservations@michelleleighvacationrentals.com',
 #        'value' : 'ken@vennerllc.com',  # uncomment for testing purposes
         'description' : 'defines the name of the file that says we sent a message about pool heater being on',
     },
@@ -131,7 +131,7 @@ optiondictconfig = {
         'description' : 'who sends out the email about spa heater on',
     },
     'spa_email_to' : {
-        'value' : 'ken@vennerllc.com, mscribner@bcciconst.com, reservations@michelleleighvacationrentals.com',
+        'value' : 'ken@vennerllc.com, mike.kmsdev2@outlook.com, reservations@michelleleighvacationrentals.com',
 #        'value' : 'ken@vennerllc.com',
         'description' : 'defines the name of the file that says we sent a message about spa heater being on',
     },
@@ -346,12 +346,13 @@ def read_parse_output_pool(input_file, output_file):
     }
 
 
-def message_on_pool_state_change(pool_settings, optiondict):
+def message_on_pool_state_change(pool_settings, optiondict, pool_heater_allowed):
     ''' create an email when the state changes on pool heater
     using a lock file to capture what the state currently is
 
     pool_settings - dict of values read in 
     optiondict - the options dictionary
+    pool_heater_invalid_dates - list of dates the pool is enabled to be on
 
     '''
 
@@ -419,7 +420,12 @@ def message_on_pool_state_change(pool_settings, optiondict):
         # log message
         logger.info('NOW reading pool settings - sent message: %s and removed file: %s', msgid['id'], optiondict['pool_missing_filename'])
         
-    
+    # is it ok to have the pool on
+    if datetime.datetime.now().date() in pool_heater_allowed:
+        pool_ok = '\nThe pool is allowed to be on'
+    else:
+        pool_ok = '\nThe pool is NOT supposed to be on - automation should shut it off'
+
     # POOL
     if os.path.isfile(optiondict['pool_heater_filename']):
         # if there is a lock file - capture the informatoin about this lock file
@@ -454,7 +460,7 @@ def message_on_pool_state_change(pool_settings, optiondict):
                 optiondict['pool_email_from'],
                 optiondict['pool_email_to'],
                 optiondict['pool_email_subject']+'STILL ON - DAY ' + str(pool_days),
-                'Pool Heater continues to be on',
+                'Pool Heater continues to be on' + pool_ok,
                 optiondict['scopes'],
                 optiondict['file_token_json'],
                 optiondict['file_credentials_json']
@@ -470,7 +476,7 @@ def message_on_pool_state_change(pool_settings, optiondict):
                 optiondict['pool_email_from'],
                 optiondict['pool_email_to'],
                 optiondict['pool_email_subject']+'SET OVER THE MAX SETTING:  ' + str(MAX_POOL_TEMP),
-                'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP) + pool_ok,
                 optiondict['scopes'],
                 optiondict['file_token_json'],
                 optiondict['file_credentials_json']
@@ -492,7 +498,7 @@ def message_on_pool_state_change(pool_settings, optiondict):
                 optiondict['pool_email_from'],
                 optiondict['pool_email_to'],
                 optiondict['pool_email_subject']+'ON',
-                optiondict['pool_email_body']+'ON',
+                optiondict['pool_email_body']+'ON' + pool_ok,
                 optiondict['scopes'],
                 optiondict['file_token_json'],
                 optiondict['file_credentials_json']
@@ -512,7 +518,7 @@ def message_on_pool_state_change(pool_settings, optiondict):
                     optiondict['pool_email_from'],
                     optiondict['pool_email_to'],
                     optiondict['pool_email_subject']+'SET OVER THE MAX SETTING:  ' + str(MAX_POOL_TEMP),
-                    'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP),
+                    'Pool Heater set to a temp ' + pool_settings['pool_temp_set'] + ' that is over MAX SETTING:  ' + str(MAX_POOL_TEMP) + pool_ok,
                     optiondict['scopes'],
                     optiondict['file_token_json'],
                     optiondict['file_credentials_json']
@@ -796,7 +802,7 @@ if __name__ == '__main__':
     pool_heater_allowed, pool_heater_invalid_dates = read_pool_heater_allowable_file(optiondict['pool_heater_allowed_filename'])
 
     # POOL - determine if we need to message people
-    message_on_pool_state_change(pool_settings, optiondict)
+    message_on_pool_state_change(pool_settings, optiondict, pool_heater_allowed)
     
     # SPA determine if we need to message people
     message_on_spa_state_change(pool_settings, optiondict)
