@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.13
+@version:  1.14
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -16,6 +16,8 @@ import datetime
 import kvutil
 import kvgmailsendsimple
 import kvdate
+import poolapi
+import poolfile
 
 # CONSTANTS
 DAY_SECONDS = 60 * 60 * 24
@@ -51,7 +53,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.13',
+        'value': '1.14',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
@@ -67,6 +69,15 @@ optiondictconfig = {
     'conf_json' : {
         'value' : ['pool.json'],
         'description' : 'defines the json configuration file to be read',
+    },
+    'direct_connect' : {
+        'value' : False,
+        'type': 'bool',
+        'description' : 'when true - we talk directly to the pool controller',
+    },
+    'pool_ip' : {
+        'value' : '192.168.8.141',
+        'description' : 'IP address of the pool controller',
     },
     'input_filename' : {
         'value' : 'output.txt',
@@ -184,31 +195,35 @@ def check_file_writable(fnm):
     return os.access(pdir, os.W_OK)
 
 
-def read_pool_heater_allowable_file(input_file):
-    '''
-    if file exists, read in the file and convert each line to a date and build a list of dates
-    that we will not flag the pool is enabled and attempt to turn it off
-    '''
-    pool_heater_allowed = []
-    pool_heater_invalid_dates = []
+def save_data_to_output(now_str, output_file, result_values, result_keys):
 
-    # no file - so no inputs
-    if not os.path.exists(input_file):
-        logger.info(input_file + ' not found')
-        return pool_heater_allowed, pool_heater_invalid_dates
+    out_header = ['now_str'] + result_keys
+    out_data = [now_str] + result_values
 
-    # get the file read in the lines and convert the string to date
-    with open(input_file, 'r') as file:
-        # Read each line in the file
-        for idx, line in enumerate(file):
-            try:
-                pool_heater_allowed.append(kvdate.datetime_from_str(line.strip()).date())
-            except Exception as e:
-                pool_heater_invalid_dates.append(f'{idx+1}|{line.strip()}|{e}')
+    # append results
+    file_writeable = check_file_writable( output_file )
 
-    logger.info(str(len(pool_heater_allowed)) + ' dates allowed to have pool enabled')
-    return pool_heater_allowed, pool_heater_invalid_dates
 
+    # debugging
+    # print('file_writeable: ', file_writeable)
+    
+    
+    # open file for output
+    with open(output_file, "a") as file1:
+        # create header if file does not exist
+        if not file_writeable:
+            # write header if it doe snot exist
+            file1.write(','.join(out_header)
+                        +'\n')
+        
+        # Writing data to a file
+        file1.write(','.join(out_data)
+                    +'\n')
+
+        # logging
+        logger.info('Appended record to: %s ', output_file)
+        
+    
 def read_parse_output_pool(input_file, output_file):
 
     # Using readlines()
@@ -298,40 +313,21 @@ def read_parse_output_pool(input_file, output_file):
             spa_heat_mode = m.group(1)
             # print( spa_heat_mode )
 
-    # append results
-    file_writeable = check_file_writable( output_file )
-
-
-    # debugging
-    # print('file_writeable: ', file_writeable)
     
+    # call routine to save out the results
+    result_keys = ['pool_temp_last','pool_temp_set','pool_heat_set','pool_heat_mode',
+                   'spa_temp_last','spa_temp_set','spa_heat_set','spa_heat_mode']
+    result_values = [pool_temp_last, pool_temp_set, pool_heat_set, pool_heat_mode,
+                     spa_temp_last, spa_temp_set, spa_heat_set, spa_heat_mode]
+    save_data_to_output(now_str, output_file, result_values, result_keys)
     
-    # open file for output
-    with open(output_file, "a") as file1:
-        # create header if file does not exist
-        if not file_writeable:
-            # write header if it doe snot exist
-            file1.write(','.join(['now_str',
-                                  'pool_temp_last','pool_temp_set','pool_heat_set','pool_heat_mode',
-                                  'spa_temp_last','spa_temp_set','spa_heat_set','spa_heat_mode'])
-                        +'\n')
-        
-        # Writing data to a file
-        file1.write(','.join([now_str,
-                              pool_temp_last, pool_temp_set, pool_heat_set, pool_heat_mode,
-                              spa_temp_last, spa_temp_set, spa_heat_set, spa_heat_mode])
-                    +'\n')
 
+    # remove the file if it exists
+    if os.path.isfile(input_file):
+        # remove the file
+        os.remove(input_file)
         # logging
-        logger.info('Appended record to: %s ', output_file)
-        
-
-        # remove the file if it exists
-        if os.path.isfile(input_file):
-            # remove the file
-            os.remove(input_file)
-            # logging
-            logger.info('Removed input file:  %s', input_file)
+        logger.info('Removed input file:  %s', input_file)
 
     # return what we just read in
     return {
@@ -346,6 +342,25 @@ def read_parse_output_pool(input_file, output_file):
     }
 
 
+def read_direct_output_pool(ip, output_file):
+    '''
+    Read pool settings directly and save to output file
+    '''
+
+    # read using the library
+    try:
+        result_values, result_keys = poolapi.main(ip=ip, logger=logger)
+    except Exception as e:
+        logger.info('Could not read values - EXITTING')
+        logger.error(e)
+        
+    # save the results to the output file
+    save_data_to_output(now_str, output_file, result_values, result_keys)
+
+    # return dictoinary
+    return dict(zip(result_keys, result_values))
+
+    
 def message_on_pool_state_change(pool_settings, optiondict, pool_heater_allowed):
     ''' create an email when the state changes on pool heater
     using a lock file to capture what the state currently is
@@ -527,6 +542,10 @@ def message_on_pool_state_change(pool_settings, optiondict, pool_heater_allowed)
                 # log message
                 logger.info('Pool heater set over max [%s/%s] days - sent message: %s and removed file: %s',
                             pool_settings['pool_temp_set'], str(MAX_POOL_TEMP), msgid['id'], optiondict['pool_heater_filename'])
+                
+                # if we have the ability turn off the heat
+                if optiondict['pool_ip']:
+                    poolapi.set_pool_temp(ip=optiondict['pool_ip'], desired_temp=MAX_POOL_TEMP)
 
     # return back the message id or none
     return msgid
@@ -591,10 +610,16 @@ def message_on_pool_turn_off(pool_settings, pool_heater_allowed, pool_heater_inv
             optiondict['file_credentials_json']
         )
 
-        # create the lock file
-        with open(optiondict['pool_heater_off_filename'], 'w') as lock_file:
-            lock_file.write('Pool ON being turned OFF')
+        # we want to turn off the pool heater
+        if optiondict['direct_connect'] and optiondict['pool_ip']:
+            # if we hvae the ability turn off the heat directly so we will turn it off
+            poolapi.set_heat_mode_pool(ip=optiondict['pool_ip'], mode=0, logger=logger)
+        else:
+            # create the lock file - as we can't turn it off directly - we will have the shell script turn it off
+            with open(optiondict['pool_heater_off_filename'], 'w') as lock_file:
+                lock_file.write('Pool ON being turned OFF')
 
+            
         # log message
         logger.info('Pool heater ON - being turned OFF sent message: %s and created file: %s', msgid['id'], optiondict['pool_heater_off_filename'])
             
@@ -717,9 +742,14 @@ def message_on_spa_state_change(pool_settings, optiondict):
                 optiondict['file_credentials_json']
             )
 
-            # create the lock file
-            with open(optiondict['spa_heater_off_filename'], 'w') as lock_file:
-                lock_file.write('SPA ON being turned OFF')
+            # need to turn off the spa
+            if optiondict['direct_connect'] and optiondict['pool_ip']:
+                # if we hvae the ability turn off the heat
+                poolapi.set_heat_mode_spa(ip=optiondict['pool_ip'], mode=0, logger=logger)
+            else:
+                # create the lock file and have shell script turn it off
+                with open(optiondict['spa_heater_off_filename'], 'w') as lock_file:
+                    lock_file.write('SPA ON being turned OFF')
 
             # log message
             logger.info('SPA heater on too long turning off SPA - sent message: %s and created file: %s', msgid['id'], optiondict['spa_heater_off_filename'])
@@ -796,10 +826,17 @@ if __name__ == '__main__':
         
     # process the pool file
     logger.info( "Call read and save pool data function" )
-    pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
+    if optiondict['direct_connect']:
+        if not optiondict['pool_ip']:
+            logger.error('Direct connect enabled - no pool_ip defined')
+            sys.exit(1)
+
+        pool_settings = read_direct_output_pool(optiondict['pool_ip'], optiondict['pool_filename'])
+    else:
+        pool_settings = read_parse_output_pool(optiondict['input_filename'], optiondict['pool_filename'])
 
     # POOL - capture valid dates for pool to be enabled
-    pool_heater_allowed, pool_heater_invalid_dates = read_pool_heater_allowable_file(optiondict['pool_heater_allowed_filename'])
+    pool_heater_allowed, pool_heater_invalid_dates = poolfile.read_pool_heater_allowable_file(optiondict['pool_heater_allowed_filename'], logger)
 
     # POOL - determine if we need to message people
     message_on_pool_state_change(pool_settings, optiondict, pool_heater_allowed)
