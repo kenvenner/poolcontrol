@@ -2,7 +2,7 @@ async-timeout==4.0.3
 cachetools==5.3.2
 certifi==2024.2.2
 charset-normalizer==3.3.2
-contourpy==1.2.0
+contourpy	
 cycler==0.12.1
 et-xmlfile==1.1.0
 fonttools==4.47.2
@@ -14,13 +14,13 @@ google-auth-oauthlib==1.2.0
 googleapis-common-protos==1.62.0
 httplib2==0.22.0
 idna==3.6
-kiwisolver==1.4.5
-matplotlib==3.8.2
-numpy==1.26.3
+kiwisolver
+matplotlib
+numpy
 oauthlib==3.2.2
 openpyxl==3.1.2
 packaging==23.2
-pillow==10.2.0
+pillow
 protobuf==4.25.2
 pyasn1==0.5.1
 pyasn1-modules==0.3.0

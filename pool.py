@@ -1,7 +1,7 @@
 '''
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version:  1.14
+@version: 1.15
 
 Take the output from "screenlogic > output.txt" 
 and parse that data and create append the output
@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     'AppVersion' : {
-        'value': '1.14',
+        'value': '1.15',
         'description' : 'defines the version number for the app',
     },
     'debug' : {
