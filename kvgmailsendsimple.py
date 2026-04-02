@@ -28,7 +28,7 @@ pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-
 
 @author:  Ken Venner
 @contact: ken@vennerllc.com
-@version: 1.05
+@version:  1.04
 
 
 Created:  2024-02-18;kv
@@ -43,7 +43,7 @@ SCOPES = [
 ]
 
 # version number
-AppVersion = '1.05'
+AppVersion = '1.04'
 
 
 def convert_email_to_filename(email_addr, file_ext='json'):
