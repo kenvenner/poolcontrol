@@ -8,6 +8,7 @@ and parse that data and create append the output
 to the output filename
 
 '''
+import sys
 import os.path
 import os
 import logging
@@ -15,7 +16,6 @@ import re
 import datetime
 import kvutil
 import kvgmailsendsimple
-import kvdate
 import poolapi
 import poolfile
 
@@ -190,7 +190,8 @@ def check_file_writable(fnm):
 
     # target does not exist, check perms on parent dir
     pdir = os.path.dirname(fnm)
-    if not pdir: pdir = '.'
+    if not pdir:
+        pdir = '.'
     # target is creatable if parent dir is writable
     return os.access(pdir, os.W_OK)
 
