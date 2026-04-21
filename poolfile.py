@@ -52,7 +52,9 @@ def read_pool_heater_allowable_file(
                 pool_heater_invalid_dates.append(f"{idx + 1}|{line.strip()}|{e}")
 
     if logger:
-        logger.info(str(len(pool_heater_allowed)) + " dates allowed to have pool enabled")
+        logger.info(
+            str(len(pool_heater_allowed)) + " dates allowed to have pool enabled"
+        )
     return pool_heater_allowed, pool_heater_invalid_dates
 
 

@@ -43,7 +43,9 @@ GET_ENUM_4_SETTING = {
 
 
 async def read_screenlogic(
-    ip: str = GATEWAY_IP, disp_msg: bool | None = None, logger: logging.Logger | None = None
+    ip: str = GATEWAY_IP,
+    disp_msg: bool | None = None,
+    logger: logging.Logger | None = None,
 ) -> tuple[list, list]:
     """
     Read data from a device based on the IP passed in
