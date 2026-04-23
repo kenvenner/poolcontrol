@@ -1,7 +1,7 @@
 """
 @author:   Ken Venner
 @contact:  ken@venerllc.com
-@version: 1.15
+@version: 1.16
 
 Take the output from "screenlogic > output.txt"
 and parse that data and create append the output
@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 # application variables
 optiondictconfig = {
     "AppVersion": {
-        "value": "1.15",
+        'value': '1.16',
         "description": "defines the version number for the app",
     },
     "debug": {
@@ -253,56 +253,56 @@ def read_parse_output_pool(input_file, output_file):
         # debugging
         # print("Line{}: {}".format(count, line.strip()))
 
-        m = re.search("Pool temperature is last\s+(\d+)", line)
+        m = re.search(r"Pool temperature is last\s+(\d+)", line)
 
         # print( count, m, line )
         if m:
             pool_temp_last = m.group(1)
             # print( pool_temp_last  )
 
-        m = re.search("Pool Heat Set Point:\s+(\d+)", line)
+        m = re.search(r"Pool Heat Set Point:\s+(\d+)", line)
 
         # print( count, m, line )
         if m:
             pool_temp_set = m.group(1)
             # print( pool_temp_set )
 
-        m = re.search("Pool Heat:\s+(.+)", line)
+        m = re.search(r"Pool Heat:\s+(.+)", line)
 
         # print( count, m, line )
         if m:
             pool_heat_set = m.group(1)
             # print( pool_heat_set )
 
-        m = re.search("Pool Heat Mode:\s+(.+)", line)
+        m = re.search(r"Pool Heat Mode:\s+(.+)", line)
 
         # print( count, m, line )
         if m:
             pool_heat_mode = m.group(1)
             # print( pool_heat_mode)
 
-        m = re.search("Spa temperature is last\s+(\d+)", line)
+        m = re.search(r"Spa temperature is last\s+(\d+)", line)
 
         # print( count, m, line )
         if m:
             spa_temp_last = m.group(1)
             # print( spa_temp_last )
 
-        m = re.search("Spa Heat Set Point:\s+(\d+)", line)
+        m = re.search(r"Spa Heat Set Point:\s+(\d+)", line)
 
         # print( count, m, line )
         if m:
             spa_temp_set = m.group(1)
             # print( spa_temp_set )
 
-        m = re.search("Spa Heat:\s+(.+)", line)
+        m = re.search(r"Spa Heat:\s+(.+)", line)
 
         # print( count, m, line )
         if m:
             spa_heat_set = m.group(1)
             # print( spa_heat_set )
 
-        m = re.search("Spa Heat Mode:\s+(.+)", line)
+        m = re.search(r"Spa Heat Mode:\s+(.+)", line)
 
         # print( count, m, line )
         if m:
